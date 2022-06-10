@@ -6,7 +6,7 @@ import gi
 import yt_dlp
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib
 
 filename = None
 video_id = None
@@ -56,15 +56,17 @@ def download(url, formid, audio):
     def my_hook(d):
         if d['status'] == 'downloading':
             x = d['_percent_str'].replace("%", "")
-            prog.set_fraction(float(x) / 100)
-            errorlabel.set_text("Downloading")
+            GLib.idle_add(lambda: prog.set_fraction(float(x) / 100))
+            GLib.idle_add(lambda: errorlabel.set_text("Downloading"))
+
         if d['status'] == 'finished':
-            errorlabel.set_text("Download complete, Processing")
+            GLib.idle_add(lambda: errorlabel.set_text("Download complete, Processing"))
 
     if audio:
         ydl_opts = {
             'format': str(formid),
             'postprocessors': [{
+                'ffmpeg_location': "ffmpeg/bin",
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
@@ -74,6 +76,7 @@ def download(url, formid, audio):
         }
     else:
         ydl_opts = {
+            'ffmpeg_location': "ffmpeg/bin",
             'format': f"{formid}+bestaudio/best",
             'preferredcodec': 'mp4',
             'logger': MyLogger(),
@@ -140,12 +143,15 @@ def downloadstart(widget):
     global formatids
     select = optslist.get_selection()
     listore, iterer = select.get_selected()
-    index = int(listore.get_value(iterer, 0))
-    aud = audonly.get_active()
-    url = urltext.get_text()
-    formid = formatids[index]
-
-    threading.Thread(target=download, args=(url, formid, aud)).start()
+    try:
+        index = int(listore.get_value(iterer, 0))
+        aud = audonly.get_active()
+        url = urltext.get_text()
+        formid = formatids[index]
+        errorlabel.set_text("")
+        threading.Thread(target=download, args=(url, formid, aud)).start()
+    except TypeError:
+        errorlabel.set_text("Select a value from the list first")
 
 
 # setup
