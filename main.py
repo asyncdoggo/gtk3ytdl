@@ -65,8 +65,8 @@ def download(url, formid, audio):
     if audio:
         ydl_opts = {
             'format': str(formid),
+            'ffmpeg_location': "ffmpeg/bin",
             'postprocessors': [{
-                'ffmpeg_location': "ffmpeg/bin",
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
