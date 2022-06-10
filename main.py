@@ -32,10 +32,16 @@ def getopts(url):
                 e = f["fps"]
                 e = f["filesize"]
             except:
-                f["fps"] = None
-                f["filesize"] = None
+                f["fps"] = 0
+                f["filesize"] = 0
             formid.append(f["format_id"])
-            opts_list.append([i, str(f["format"]), str(f["fps"]), str(f["filesize"])])
+            try:
+                opts_list.append([i, str(f["format"]), str(f["fps"]), str(round(f["filesize"]/1024**2,2))])
+            except:
+                opts_list.append([i, str(f["format"]), str(f["fps"]), str(f["filesize"])])
+
+
+
             i += 1
     return opts_list, formid
 
@@ -57,7 +63,6 @@ def download(url, formid, audio):
         if d['status'] == 'downloading':
             x = d['_percent_str'].replace("%", "")
             GLib.idle_add(lambda: prog.set_fraction(float(x) / 100))
-            GLib.idle_add(lambda: errorlabel.set_text("Downloading"))
 
         if d['status'] == 'finished':
             GLib.idle_add(lambda: errorlabel.set_text("Download complete, Processing"))
@@ -65,7 +70,7 @@ def download(url, formid, audio):
     if audio:
         ydl_opts = {
             'format': str(formid),
-            'ffmpeg_location': "ffmpeg/bin",
+            #'ffmpeg_location': "ffmpeg/bin",
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
@@ -76,7 +81,7 @@ def download(url, formid, audio):
         }
     else:
         ydl_opts = {
-            'ffmpeg_location': "ffmpeg/bin",
+            #'ffmpeg_location': "ffmpeg/bin",
             'format': f"{formid}+bestaudio/best",
             'preferredcodec': 'mp4',
             'logger': MyLogger(),
@@ -84,6 +89,7 @@ def download(url, formid, audio):
         }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        errorlabel.set_text("Downloading")
         ydl.download(url)
         folder = browsetext.get_text()
         tempfile = glob.glob(f"*{video_id}*")[0]
@@ -173,7 +179,7 @@ s1: Gtk.ListStore = Gtk.ListStore(int, str, str, str)
 
 # define list
 optslist.set_model(s1)
-for i, column_title in enumerate(["index", "format", "fps", "filesize"]):
+for i, column_title in enumerate(["index", "format", "fps", "filesize(MB)"]):
     renderer = Gtk.CellRendererText()
     column = Gtk.TreeViewColumn(column_title, renderer, text=i)
     optslist.append_column(column)
