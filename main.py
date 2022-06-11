@@ -1,5 +1,6 @@
 import glob
 import os
+import pathlib
 import shutil
 import threading
 import gi
@@ -17,10 +18,13 @@ def getopts(url):
     global filename, video_id
     opts_list = []
     formid = []
-    with yt_dlp.YoutubeDL() as ydl:
+    if "watch" not in url:
+        return "invalid", None
+    with yt_dlp.YoutubeDL({"noplaylist":"true"}) as ydl:
         try:
             info = ydl.extract_info(url, download=False)
             filename = ydl.prepare_filename(info)
+            selectlabel.set_text(f"selected video:\n{filename}")
             video_id = info["id"]
         except yt_dlp.utils.DownloadError:
             return "invalid", None
@@ -36,11 +40,11 @@ def getopts(url):
                 f["filesize"] = 0
             formid.append(f["format_id"])
             try:
-                opts_list.append([i, str(f["format"]), str(f["fps"]), str(round(f["filesize"]/1024**2,2))])
+                opts_list.append([i, str(f["format"]), str(
+                    f["fps"]), str(round(f["filesize"]/1024**2, 2))])
             except:
-                opts_list.append([i, str(f["format"]), str(f["fps"]), str(f["filesize"])])
-
-
+                opts_list.append(
+                    [i, str(f["format"]), str(f["fps"]), str(f["filesize"])])
 
             i += 1
     return opts_list, formid
@@ -65,12 +69,14 @@ def download(url, formid, audio):
             GLib.idle_add(lambda: prog.set_fraction(float(x) / 100))
 
         if d['status'] == 'finished':
-            GLib.idle_add(lambda: errorlabel.set_text("Download complete, Processing"))
+            GLib.idle_add(lambda: errorlabel.set_text(
+                "Download complete, Processing"))
 
     if audio:
         ydl_opts = {
             'format': str(formid),
-            #'ffmpeg_location': "ffmpeg/bin",
+            # 'ffmpeg_location': "ffmpeg/bin",
+            "noplaylist":"true",
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
@@ -81,7 +87,8 @@ def download(url, formid, audio):
         }
     else:
         ydl_opts = {
-            #'ffmpeg_location': "ffmpeg/bin",
+            # 'ffmpeg_location': "ffmpeg/bin",
+            "noplaylist":"true",
             'format': f"{formid}+bestaudio/best",
             'preferredcodec': 'mp4',
             'logger': MyLogger(),
@@ -89,14 +96,26 @@ def download(url, formid, audio):
         }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        errorlabel.set_text("Downloading")
-        ydl.download(url)
         folder = browsetext.get_text()
-        tempfile = glob.glob(f"*{video_id}*")[0]
-        pat = os.path.join(folder, tempfile)
-        shutil.move(tempfile, pat)
-        errorlabel.set_text("Completed")
+        if pathlib.Path(folder).exists():
+            errorlabel.set_text("Downloading")
+            try:
+                ydl.download(url)
+                tempfile = glob.glob(f"*{video_id}*")[0]
+                pat = os.path.join(folder, tempfile)
+                shutil.move(tempfile, pat)
+                errorlabel.set_text("Completed")
+                downbutton.set_sensitive(True)
 
+            except yt_dlp.utils.DownloadError as e:
+                downbutton.set_sensitive(True)
+                if "ffmpeg" in repr(e):
+                    errorlabel.set_text("Error:ffmpeg not installed")
+                else:
+                    errorlabel.set_text(e.msg)
+        else:
+            errorlabel.set_text("Incorrect Path")
+            downbutton.set_sensitive(True)
 
 #######################################
 
@@ -134,6 +153,9 @@ def fillopts(widget):
 def updatestuff():
     global formatids
     prog.set_fraction(0)
+    errorlabel.set_text("")
+    selectlabel.set_text("")
+
     url = urltext.get_text()
     speen.start()
     opts, formatids = getopts(url)
@@ -147,6 +169,7 @@ def updatestuff():
 
 def downloadstart(widget):
     global formatids
+    downbutton.set_sensitive(False)
     select = optslist.get_selection()
     listore, iterer = select.get_selected()
     try:
@@ -157,6 +180,7 @@ def downloadstart(widget):
         errorlabel.set_text("")
         threading.Thread(target=download, args=(url, formid, aud)).start()
     except TypeError:
+        downbutton.set_sensitive(True)
         errorlabel.set_text("Select a value from the list first")
 
 
@@ -174,6 +198,8 @@ audonly: Gtk.ToggleButton = build.get_object("audonly")
 optslist: Gtk.TreeView = build.get_object("optslist")
 speen: Gtk.Spinner = build.get_object("speen")
 errorlabel: Gtk.Label = build.get_object("errorlabel")
+selectlabel: Gtk.Label = build.get_object("selectlabel")
+selectlabel.set_line_wrap(True)
 
 s1: Gtk.ListStore = Gtk.ListStore(int, str, str, str)
 
