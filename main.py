@@ -9,91 +9,90 @@ import yt_dlp
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
 
-filename = None
+title = None
 video_id = None
 
 
 # YDL
 def getopts(url):
-    global filename, video_id
+    global title, video_id
     opts_list = []
     formid = []
     if "watch" not in url:
         return "invalid", None
-    with yt_dlp.YoutubeDL({"noplaylist":"true"}) as ydl:
+    with yt_dlp.YoutubeDL({"noplaylist": "true"}) as ydl:
         try:
             info = ydl.extract_info(url, download=False)
-            filename = ydl.prepare_filename(info)
-            selectlabel.set_text(f"selected video:\n{filename}")
             video_id = info["id"]
         except yt_dlp.utils.DownloadError:
             return "invalid", None
         info = ydl.sanitize_info(info)
+        title = info["title"]
+        selectlabel.set_text(f"selected video:\n{title}")
         formats = info["formats"]
+
         i = 0
         for f in formats:
             try:
-                e = f["fps"]
-                e = f["filesize"]
-            except:
-                f["fps"] = 0
-                f["filesize"] = 0
-            formid.append(f["format_id"])
-            try:
-                opts_list.append([i, str(f["format"]), str(
-                    f["fps"]), str(round(f["filesize"]/1024**2, 2))])
-            except:
-                opts_list.append(
-                    [i, str(f["format"]), str(f["fps"]), str(f["filesize"])])
-
-            i += 1
+                a = f["fps"]
+                b = f["filesize"]
+                c = f["ext"]
+                if b:
+                    fsize = str(round(b / 1024 ** 2, 2))
+                else:
+                    b = 0
+                opts_list.append([i, str(f["format"]), str(a), str(f["ext"]), fsize])
+                formid.append(f["format_id"])
+                i += 1
+            except KeyError:
+                print(f)
+                pass
     return opts_list, formid
 
 
+class MyLogger:
+    def debug(self, msg):
+        pass
+
+    def warning(self, msg):
+        pass
+
+    def error(self, msg):
+        print(msg)
+
+
+def my_hook(d):
+    if d['status'] == 'downloading':
+        x = d['_percent_str'].replace("%", "")
+        GLib.idle_add(lambda: prog.set_fraction(float(x) / 100))
+        try:
+            speed = round(d["speed"] / 1048576, 2)
+            eta = d["eta"]
+            down = round(d['downloaded_bytes'] / 1048576, 2)
+        except TypeError:
+            speed = ''
+            eta = ''
+            down = ''
+        GLib.idle_add(lambda: speedeta.set_text(f"speed:{speed} MB/s \neta: {eta} sec \ndownloaded: {down} MB"))
+
+    if d['status'] == 'finished':
+        GLib.idle_add(lambda: errorlabel.set_text("Download complete, Downloading audio\n and Processing"))
+
+
 def download(url, formid, audio):
-    global filename, video_id
+    global title, video_id
 
-    class MyLogger:
-        def debug(self, msg):
-            pass
-
-        def warning(self, msg):
-            pass
-
-        def error(self, msg):
-            print(msg)
-
-    def my_hook(d):
-        if d['status'] == 'downloading':
-            x = d['_percent_str'].replace("%", "")
-            GLib.idle_add(lambda: prog.set_fraction(float(x) / 100))
-
-        if d['status'] == 'finished':
-            GLib.idle_add(lambda: errorlabel.set_text(
-                "Download complete, Processing"))
+    ydl_opts = {
+        "noplaylist": "true",
+        'format': f"{formid}+bestaudio/best",
+        'logger': MyLogger(),
+        'progress_hooks': [my_hook]
+    }
 
     if audio:
-        ydl_opts = {
-            'format': str(formid),
-            # 'ffmpeg_location': "ffmpeg/bin",
-            "noplaylist":"true",
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'logger': MyLogger(),
-            'progress_hooks': [my_hook],
-        }
-    else:
-        ydl_opts = {
-            # 'ffmpeg_location': "ffmpeg/bin",
-            "noplaylist":"true",
-            'format': f"{formid}+bestaudio/best",
-            'preferredcodec': 'mp4',
-            'logger': MyLogger(),
-            'progress_hooks': [my_hook]
-        }
+        ydl_opts['format'] = str(formid)
+        ydl_opts['postprocessors'] = [
+            {'key': 'FFmpegExtractAudio', 'preferredcodec': 'wav', 'preferredquality': 'best'}]
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         folder = browsetext.get_text()
@@ -116,6 +115,7 @@ def download(url, formid, audio):
         else:
             errorlabel.set_text("Incorrect Path")
             downbutton.set_sensitive(True)
+
 
 #######################################
 
@@ -184,6 +184,17 @@ def downloadstart(widget):
         errorlabel.set_text("Select a value from the list first")
 
 
+def selectformat(combo):
+    tree_iter = combo.get_active_iter()
+    if tree_iter is not None:
+        model = combo.get_model()
+        row_id, name = model[tree_iter][:2]
+        print("Selected: ID=%d, name=%s" % (row_id, name))
+    else:
+        entry = combo.get_child()
+        print("Entered: %s" % entry.get_text())
+
+
 # setup
 formatids = []
 
@@ -199,18 +210,19 @@ optslist: Gtk.TreeView = build.get_object("optslist")
 speen: Gtk.Spinner = build.get_object("speen")
 errorlabel: Gtk.Label = build.get_object("errorlabel")
 selectlabel: Gtk.Label = build.get_object("selectlabel")
+speedeta: Gtk.Label = build.get_object("speedeta")
 selectlabel.set_line_wrap(True)
+errorlabel.set_line_wrap(True)
+speedeta.set_line_wrap(True)
 
-s1: Gtk.ListStore = Gtk.ListStore(int, str, str, str)
-
-# define list
+# define optslist
+s1: Gtk.ListStore = Gtk.ListStore(int, str, str, str, str)
 optslist.set_model(s1)
-for i, column_title in enumerate(["index", "format", "fps", "filesize(MB)"]):
+for i, column_title in enumerate(["Index", "Format", "FPS", "Codec", "Filesize(MB)"]):
     renderer = Gtk.CellRendererText()
     column = Gtk.TreeViewColumn(column_title, renderer, text=i)
     optslist.append_column(column)
 #
-
 
 window.set_default_size(600, 700)
 browsebutton.connect("clicked", browsefile)
