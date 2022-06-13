@@ -45,7 +45,6 @@ def getopts(url):
                 formid.append(f["format_id"])
                 i += 1
             except KeyError:
-                print(f)
                 pass
     return opts_list, formid
 
@@ -182,17 +181,6 @@ def downloadstart(widget):
     except TypeError:
         downbutton.set_sensitive(True)
         errorlabel.set_text("Select a value from the list first")
-
-
-def selectformat(combo):
-    tree_iter = combo.get_active_iter()
-    if tree_iter is not None:
-        model = combo.get_model()
-        row_id, name = model[tree_iter][:2]
-        print("Selected: ID=%d, name=%s" % (row_id, name))
-    else:
-        entry = combo.get_child()
-        print("Entered: %s" % entry.get_text())
 
 
 # setup
