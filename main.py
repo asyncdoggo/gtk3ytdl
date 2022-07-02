@@ -1,122 +1,11 @@
-import glob
-import os
-import pathlib
-import shutil
 import threading
+import time
+
 import gi
-import yt_dlp
+import ydlp
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
-
-title = None
-video_id = None
-
-
-# YDL
-def getopts(url):
-    global title, video_id
-    opts_list = []
-    formid = []
-    if "watch" not in url:
-        return "invalid", None
-    with yt_dlp.YoutubeDL({"noplaylist": "true"}) as ydl:
-        try:
-            info = ydl.extract_info(url, download=False)
-            video_id = info["id"]
-        except yt_dlp.utils.DownloadError:
-            return "invalid", None
-        info = ydl.sanitize_info(info)
-        title = info["title"]
-        selectlabel.set_text(f"selected video:\n{title}")
-        formats = info["formats"]
-
-        i = 0
-        for f in formats:
-            try:
-                a = f["fps"]
-                b = f["filesize"]
-                c = f["ext"]
-                if b:
-                    fsize = str(round(b / 1024 ** 2, 2))
-                else:
-                    b = 0
-                opts_list.append([i, str(f["format"]), str(a), str(f["ext"]), fsize])
-                formid.append(f["format_id"])
-                i += 1
-            except KeyError:
-                pass
-    return opts_list, formid
-
-
-class MyLogger:
-    def debug(self, msg):
-        pass
-
-    def warning(self, msg):
-        pass
-
-    def error(self, msg):
-        print(msg)
-
-
-def my_hook(d):
-    if d['status'] == 'downloading':
-        x = d['_percent_str'].replace("%", "")
-        GLib.idle_add(lambda: prog.set_fraction(float(x) / 100))
-        try:
-            speed = round(d["speed"] / 1048576, 2)
-            eta = d["eta"]
-            down = round(d['downloaded_bytes'] / 1048576, 2)
-        except TypeError:
-            speed = ''
-            eta = ''
-            down = ''
-        GLib.idle_add(lambda: speedeta.set_text(f"speed:{speed} MB/s \neta: {eta} sec \ndownloaded: {down} MB"))
-
-    if d['status'] == 'finished':
-        GLib.idle_add(lambda: errorlabel.set_text("Download complete, Downloading audio\n and Processing"))
-
-
-def download(url, formid, audio):
-    global title, video_id
-
-    ydl_opts = {
-        "noplaylist": "true",
-        'format': f"{formid}+bestaudio/best",
-        'logger': MyLogger(),
-        'progress_hooks': [my_hook]
-    }
-
-    if audio:
-        ydl_opts['format'] = str(formid)
-        ydl_opts['postprocessors'] = [
-            {'key': 'FFmpegExtractAudio', 'preferredcodec': 'wav', 'preferredquality': 'best'}]
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        folder = browsetext.get_text()
-        if pathlib.Path(folder).exists():
-            errorlabel.set_text("Downloading")
-            try:
-                ydl.download(url)
-                tempfile = glob.glob(f"*{video_id}*")[0]
-                pat = os.path.join(folder, tempfile)
-                shutil.move(tempfile, pat)
-                errorlabel.set_text("Completed")
-                downbutton.set_sensitive(True)
-
-            except yt_dlp.utils.DownloadError as e:
-                downbutton.set_sensitive(True)
-                if "ffmpeg" in repr(e):
-                    errorlabel.set_text("Error:ffmpeg not installed")
-                else:
-                    errorlabel.set_text(e.msg)
-        else:
-            errorlabel.set_text("Incorrect Path")
-            downbutton.set_sensitive(True)
-
-
-#######################################
 
 
 build = Gtk.Builder()
@@ -145,11 +34,6 @@ def browsefile(widget):
 
 def fillopts(widget):
     s1.clear()
-    threading.Thread(target=updatestuff).start()
-    optslist.set_model(s1)
-
-
-def updatestuff():
     global formatids
     prog.set_fraction(0)
     errorlabel.set_text("")
@@ -157,13 +41,15 @@ def updatestuff():
 
     url = urltext.get_text()
     speen.start()
-    opts, formatids = getopts(url)
+    opts, formatids, title = ydlp.getopts(url)
+    selectlabel.set_text(f"selected video:\n{title}")
     if opts == "invalid":
         errorlabel.set_text("Invalid url")
     else:
         for k in opts:
             s1.append(k)
     speen.stop()
+    optslist.set_model(s1)
 
 
 def downloadstart(widget):
@@ -177,10 +63,23 @@ def downloadstart(widget):
         url = urltext.get_text()
         formid = formatids[index]
         errorlabel.set_text("")
-        threading.Thread(target=download, args=(url, formid, aud)).start()
+        folder = browsetext.get_text()
+        threading.Thread(target=initdownload, args=(url, formid, aud, folder)).start()
     except TypeError:
         downbutton.set_sensitive(True)
         errorlabel.set_text("Select a value from the list first")
+
+
+def initdownload(url, formid, aud, folder):
+    t1 = threading.Thread(target=ydlp.download, args=(url, formid, aud, folder))
+    t1.start()
+    while t1.is_alive():
+        time.sleep(0.2)
+        GLib.idle_add(lambda: prog.set_fraction(ydlp.pmsg))
+        GLib.idle_add(lambda: speedeta.set_text(ydlp.smsg))
+        GLib.idle_add(lambda: errorlabel.set_text(ydlp.gmsg))
+
+    downbutton.set_sensitive(True)
 
 
 # setup
@@ -215,7 +114,7 @@ for i, column_title in enumerate(["Index", "Format", "FPS", "Codec", "Filesize(M
 window.set_default_size(600, 700)
 browsebutton.connect("clicked", browsefile)
 downbutton.connect("clicked", downloadstart)
-showopts.connect("clicked", fillopts)
+showopts.connect("clicked", lambda x: threading.Thread(target=fillopts, args=x).start())
 
 window.connect("destroy", Gtk.main_quit)
 window.show_all()
