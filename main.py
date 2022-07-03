@@ -1,9 +1,7 @@
 import threading
 import time
-
 import gi
 import ydlp
-
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
 
@@ -52,9 +50,10 @@ def fillopts(widget):
     optslist.set_model(s1)
 
 
-def downloadstart(widget):
+def initdownload(widget):
     global formatids
     downbutton.set_sensitive(False)
+    showopts.set_sensitive(False)
     select = optslist.get_selection()
     listore, iterer = select.get_selected()
     try:
@@ -64,13 +63,14 @@ def downloadstart(widget):
         formid = formatids[index]
         errorlabel.set_text("")
         folder = browsetext.get_text()
-        threading.Thread(target=initdownload, args=(url, formid, aud, folder)).start()
+        threading.Thread(target=downloadstart, args=(url, formid, aud, folder)).start()
     except TypeError:
         downbutton.set_sensitive(True)
+        showopts.set_sensitive(True)
         errorlabel.set_text("Select a value from the list first")
 
 
-def initdownload(url, formid, aud, folder):
+def downloadstart(url, formid, aud, folder):
     t1 = threading.Thread(target=ydlp.download, args=(url, formid, aud, folder))
     t1.start()
     while t1.is_alive():
@@ -80,6 +80,8 @@ def initdownload(url, formid, aud, folder):
         GLib.idle_add(lambda: errorlabel.set_text(ydlp.gmsg))
 
     downbutton.set_sensitive(True)
+    showopts.set_sensitive(True)
+
 
 
 # setup
@@ -113,7 +115,7 @@ for i, column_title in enumerate(["Index", "Format", "FPS", "Codec", "Filesize(M
 
 window.set_default_size(600, 700)
 browsebutton.connect("clicked", browsefile)
-downbutton.connect("clicked", downloadstart)
+downbutton.connect("clicked", initdownload)
 showopts.connect("clicked", lambda x: threading.Thread(target=fillopts, args=x).start())
 
 window.connect("destroy", Gtk.main_quit)
