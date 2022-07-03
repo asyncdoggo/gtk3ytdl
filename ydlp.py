@@ -2,24 +2,24 @@ import glob
 import os
 import pathlib
 import shutil
-
 import yt_dlp
+import re
 
 pmsg = 0
 smsg = ""
 gmsg = ""
 
-
 title = None
 video_id = None
+reg = "^(https?\:\/\/)?((www\.)?youtube\.com|youtu\.be)\/.+$"
 
 
 def getopts(url):
     global title, video_id
     opts_list = []
     formid = []
-    if "watch" not in url:
-        return "invalid", None
+    if not re.match(reg, url):
+        return "invalid", None, None
     with yt_dlp.YoutubeDL({"noplaylist": "true"}) as ydl:
         try:
             info = ydl.extract_info(url, download=False)
@@ -60,7 +60,7 @@ class MyLogger:
 
 
 def my_hook(d):
-    global pmsg,smsg,gmsg
+    global pmsg, smsg, gmsg
     if d['status'] == 'downloading':
         x = d['_percent_str'].replace("%", "")
         pmsg = float(x) / 100
