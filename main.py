@@ -2,9 +2,9 @@ import threading
 import time
 import gi
 import ydlp
+
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
-
 
 build = Gtk.Builder()
 build.add_from_file("window.glade")
@@ -58,20 +58,20 @@ def initdownload(widget):
     listore, iterer = select.get_selected()
     try:
         index = int(listore.get_value(iterer, 0))
-        aud = audonly.get_active()
-        url = urltext.get_text()
-        formid = formatids[index]
         errorlabel.set_text("")
-        folder = browsetext.get_text()
-        threading.Thread(target=downloadstart, args=(url, formid, aud, folder)).start()
+        threading.Thread(target=downloadstart, args=[index], daemon=True).start()
     except TypeError:
         downbutton.set_sensitive(True)
         showopts.set_sensitive(True)
         errorlabel.set_text("Select a value from the list first")
 
 
-def downloadstart(url, formid, aud, folder):
-    t1 = threading.Thread(target=ydlp.download, args=(url, formid, aud, folder))
+def downloadstart(index):
+    aud = audonly.get_active()
+    url = urltext.get_text()
+    formid = formatids[index]
+    folder = browsetext.get_text()
+    t1 = threading.Thread(target=ydlp.download, args=(url, formid, aud, folder), daemon=True)
     t1.start()
     while t1.is_alive():
         time.sleep(0.2)
@@ -81,7 +81,6 @@ def downloadstart(url, formid, aud, folder):
 
     downbutton.set_sensitive(True)
     showopts.set_sensitive(True)
-
 
 
 # setup
@@ -116,7 +115,7 @@ for i, column_title in enumerate(["Index", "Format", "FPS", "Codec", "Filesize(M
 window.set_default_size(600, 700)
 browsebutton.connect("clicked", browsefile)
 downbutton.connect("clicked", initdownload)
-showopts.connect("clicked", lambda x: threading.Thread(target=fillopts, args=x).start())
+showopts.connect("clicked", lambda x: threading.Thread(target=fillopts, args=x, daemon=True).start())
 
 window.connect("destroy", Gtk.main_quit)
 window.show_all()
