@@ -96,17 +96,22 @@ def download(url, formid, audio, folder):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         if pathlib.Path(folder).exists():
             gmsg = "Downloading"
-            try:
-                ydl.download(url)
-                tempfile = glob.glob(f"*{video_id}*")[0]
-                pat = os.path.join(folder, tempfile)
-                shutil.move(tempfile, pat)
-                gmsg = "Completed"
-
-            except yt_dlp.utils.DownloadError as e:
-                if "ffmpeg" in repr(e):
-                    gmsg = "Error:ffmpeg not installed"
-                elif "giving up" in e.msg:
-                    gmsg = "ERROR:retry downloading"
+            while True:
+                try:
+                    ydl.download(url)
+                    tempfile = glob.glob(f"*{video_id}*")[0]
+                    pat = os.path.join(folder, tempfile)
+                    shutil.move(tempfile, pat)
+                    gmsg = "Completed"
+                    break
+                except yt_dlp.utils.DownloadError as e:
+                    if "ffmpeg" in repr(e):
+                        gmsg = "Error:ffmpeg not installed"
+                        break
+                    elif "giving up" in e.msg:
+                        continue
+                    else:
+                        gmsg = e.msg
+                        break
         else:
             gmsg = "folder does not exist"
