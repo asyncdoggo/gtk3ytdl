@@ -73,12 +73,16 @@ def downloadstart(index):
     folder = browsetext.get_text()
     t1 = threading.Thread(target=ydlp.download, args=(url, formid, aud, folder), daemon=True)
     t1.start()
+    GLib.idle_add(lambda: speen.start())
     while t1.is_alive():
         time.sleep(0.2)
         GLib.idle_add(lambda: prog.set_fraction(ydlp.pmsg))
-        GLib.idle_add(lambda: speedeta.set_text(ydlp.smsg))
+        GLib.idle_add(lambda: speed.set_text(ydlp.smsg[0]))
+        GLib.idle_add(lambda: downlabel.set_text(ydlp.smsg[1]))
+        GLib.idle_add(lambda: eta.set_text(ydlp.smsg[2]))
         GLib.idle_add(lambda: errorlabel.set_text(ydlp.gmsg))
 
+    GLib.idle_add(lambda: speen.stop())
     downbutton.set_sensitive(True)
     showopts.set_sensitive(True)
 
@@ -98,19 +102,21 @@ optslist: Gtk.TreeView = build.get_object("optslist")
 speen: Gtk.Spinner = build.get_object("speen")
 errorlabel: Gtk.Label = build.get_object("errorlabel")
 selectlabel: Gtk.Label = build.get_object("selectlabel")
-speedeta: Gtk.Label = build.get_object("speedeta")
+speed: Gtk.Label = build.get_object("speedlabel")
+downlabel: Gtk.Label = build.get_object("downlabel")
+eta: Gtk.Label = build.get_object("etalabel")
+
 selectlabel.set_line_wrap(True)
 errorlabel.set_line_wrap(True)
-speedeta.set_line_wrap(True)
 
-# define optslist
+
 s1: Gtk.ListStore = Gtk.ListStore(int, str, str, str, str)
 optslist.set_model(s1)
 for i, column_title in enumerate(["Index", "Format", "FPS", "Codec", "Filesize(MB)"]):
     renderer = Gtk.CellRendererText()
     column = Gtk.TreeViewColumn(column_title, renderer, text=i)
     optslist.append_column(column)
-#
+
 
 window.set_default_size(600, 700)
 browsebutton.connect("clicked", browsefile)

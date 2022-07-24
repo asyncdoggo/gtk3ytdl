@@ -6,7 +6,7 @@ import yt_dlp
 import re
 
 pmsg = 0
-smsg = ""
+smsg = ['', '', '']
 gmsg = ""
 
 title = None
@@ -65,17 +65,17 @@ def my_hook(d):
         x = d['_percent_str'].replace("%", "")
         pmsg = float(x) / 100
         try:
-            speed = round(d["speed"] / 1048576, 2)
-            eta = d["eta"]
-            down = round(d['downloaded_bytes'] / 1048576, 2)
+            speed = f"{round(d['speed'] / 1048576, 2)} MB/s"
+            eta = f"{d['eta']} sec"
+            down = f"{round(d['downloaded_bytes'] / 1048576, 2)} MB"
         except TypeError:
             speed = ''
             eta = ''
             down = ''
-        smsg = f"speed:{speed} MB/s \neta: {eta} sec \ndownloaded: {down} MB"
+        smsg = [speed, down, eta]
 
     if d['status'] == 'finished':
-        gmsg = "Download complete, Downloading audio\n and Processing"
+        gmsg = "Download complete, Downloading audio and Processing"
 
 
 def download(url, formid, audio, folder):
